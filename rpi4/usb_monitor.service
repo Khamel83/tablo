@@ -1,0 +1,21 @@
+[Unit]
+Description=Tablo USB Drive Monitor and Processor
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/tablo
+ExecStart=/usr/bin/python3 /opt/tablo/auto_tablo_processor.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables
+Environment=PYTHONPATH=/opt/tablo
+
+[Install]
+WantedBy=multi-user.target

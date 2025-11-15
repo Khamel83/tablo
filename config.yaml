@@ -1,19 +1,19 @@
 # Tablo Auto-Renamer v1
 # Core paths (absolute, with trailing slash)
 paths:
-  raw_dir:    ./temp/raw/          # HLS downloads, auto-cleared
-  clean_dir:  ./temp/clean/        # Commercial-free MP4s, kept until identified
-  plex_tv_root: ./temp/plex_tv/    # Final destination for identified files (for testing)
-  meta_dir:   ./temp/meta/         # Per-recording JSON metadata
-  epg_dir:    ./temp/epg/          # TVMaze schedule cache
-  logs_dir:   ./temp/logs/         # Rotated logs, optional
-  state_file: ./temp/state.json    # Simple DB of known IDs / last EPG fetch
+  raw_dir:    /opt/tablo/raw/          # HLS downloads, auto-cleared
+  clean_dir:  /opt/tablo/clean/        # Commercial-free MP4s, kept until identified
+  plex_tv_root: /Users/Shared/Plex/TV/  # Final destination for identified files
+  meta_dir:   /opt/tablo/meta/         # Per-recording JSON metadata
+  epg_dir:    /opt/tablo/epg/          # TVMaze schedule cache
+  logs_dir:   /opt/tablo/logs/         # Rotated logs, optional
+  state_file: /opt/tablo/state.json    # Simple DB of known IDs / last EPG fetch
 
 # Tablo device
 tablo:
   ip: "192.168.7.123"  # Find via Bonjour mDNS or your router
   port: 18080          # Tablo HTTP API port
-  mode: "direct_drive" # "streaming" (requires older firmware) or "direct_drive" (USB connection)
+  mode: "network"      # "streaming" (older firmware), "direct_drive" (USB), or "network" (RPi4 + Mac mini)
 
 # Direct drive mode (for 4th gen with locked firmware)
 direct_drive:

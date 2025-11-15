@@ -16,7 +16,7 @@ echo "Config: $CONFIG"
 echo "Time: $(date)"
 echo
 
-# Determine Tablo mode (streaming vs direct drive)
+# Determine Tablo mode (streaming vs direct drive vs network)
 TABLO_MODE=$(python3 -c "
 import yaml
 with open('$CONFIG') as f:
@@ -39,15 +39,29 @@ echo
 
 # Step 2: Pull new recordings from Tablo (mode-specific)
 echo "Step 2: Pulling new recordings..."
-if [ "$TABLO_MODE" = "direct_drive" ]; then
-    echo "Using direct drive mode (USB connection)..."
-    python3 "$SRC_DIR/pull_from_tablo_drive.py" "$CONFIG"
-    PULL_EXIT_CODE=$?
-else
-    echo "Using streaming mode (network)..."
-    python3 "$SRC_DIR/pull_from_tablo.py" "$CONFIG"
-    PULL_EXIT_CODE=$?
-fi
+case "$TABLO_MODE" in
+    "direct_drive")
+        echo "Using direct drive mode (USB connection)..."
+        python3 "$SRC_DIR/pull_from_tablo_drive.py" "$CONFIG"
+        PULL_EXIT_CODE=$?
+        ;;
+    "network")
+        echo "Using network mode (RPi4 + Mac mini)..."
+        echo "Network mode handles recording synchronization automatically"
+        echo "Checking for incoming recordings..."
+        if [ -d "/opt/tablo/incoming" ] && [ "$(ls -A /opt/tablo/incoming 2>/dev/null)" ]; then
+            echo "Found incoming recordings - network receiver will process them"
+        else
+            echo "No incoming recordings found"
+        fi
+        PULL_EXIT_CODE=0
+        ;;
+    *)
+        echo "Using streaming mode (network)..."
+        python3 "$SRC_DIR/pull_from_tablo.py" "$CONFIG"
+        PULL_EXIT_CODE=$?
+        ;;
+esac
 
 if [ $PULL_EXIT_CODE -ne 0 ]; then
     if [ "$TABLO_MODE" = "direct_drive" ]; then
@@ -76,10 +90,28 @@ echo
 echo "=== Pipeline completed successfully ==="
 echo "Time: $(date)"
 
-if [ "$TABLO_MODE" = "direct_drive" ]; then
-    echo ""
-    echo "Direct Drive Mode Notes:"
-    echo "- Connect Tablo USB drive to $SRC_DIR/../config.yaml mount point"
-    echo "- Run this script when drive is connected (e.g., weekly)"
-    echo "- Consider setting up a cron job to run weekly"
-fi
+# Mode-specific notes
+case "$TABLO_MODE" in
+    "direct_drive")
+        echo ""
+        echo "Direct Drive Mode Notes:"
+        echo "- Connect Tablo USB drive to Mac mini"
+        echo "- Run this script when drive is connected (e.g., weekly)"
+        echo "- Consider setting up a cron job to run weekly"
+        ;;
+    "network")
+        echo ""
+        echo "Network Mode Notes:"
+        echo "- RPi4 automatically detects and syncs Tablo USB drives"
+        echo "- Mac mini receives and processes synced recordings"
+        echo "- No manual drive connection needed on Mac mini"
+        echo "- Check status with: tablo-status"
+        echo "- Test connection with: tablo-test"
+        ;;
+    *)
+        echo ""
+        echo "Streaming Mode Notes:"
+        echo "- Tablo device must be accessible on network"
+        echo "- Works with older Tablo firmware (pre-2.2.55)"
+        ;;
+esac
