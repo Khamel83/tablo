@@ -11,7 +11,8 @@ paths:
 
 # Tablo device
 tablo:
-  ip: "192.168.1.123"  # Find via Bonjour mDNS or your router
+  ip: "192.168.7.123"  # Find via Bonjour mDNS or your router
+  port: 18080          # Tablo HTTP API port
 
 # Time handling
 timezone: "America/New_York"  # For ISO output filenames

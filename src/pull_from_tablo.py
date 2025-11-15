@@ -38,7 +38,9 @@ class TabloPuller:
 
         self.state = self._load_state()
         self.session = requests.Session()
-        self.session.headers.update({'User-Agent': 'TabloAutoRenamer/1.0'})
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Tablo/2.0'
+        })
 
     def _load_state(self) -> Dict:
         state_file = self.cfg['paths']['state_file']
@@ -57,29 +59,91 @@ class TabloPuller:
             json.dump(state_copy, f, indent=2)
 
     def _discover_recordings(self) -> Set[str]:
-        """Fetch recordings list from Tablo /pvr/ and extract recording IDs."""
+        """Fetch recordings list from Tablo API and extract recording IDs."""
         tablo_ip = self.cfg['tablo']['ip']
-        url = f"http://{tablo_ip}/pvr/"
+        tablo_port = self.cfg['tablo'].get('port', 80)
+        base_url = f"http://{tablo_ip}:{tablo_port}"
 
+        # First, try to authenticate with Tablo
+        if not self._authenticate_tablo(base_url):
+            logger.error("Failed to authenticate with Tablo")
+            return set()
+
+        # Get recordings list
         try:
+            # Try the recordings API endpoint
+            url = f"{base_url}/recordings"
+            response = self.session.get(url, timeout=30)
+
+            if response.status_code == 200:
+                recordings_data = response.json()
+                # Extract recording IDs from the JSON response
+                found_ids = set()
+                for recording in recordings_data.get('recordings', []):
+                    if 'id' in recording:
+                        found_ids.add(str(recording['id']))
+
+                logger.info(f"Discovered {len(found_ids)} recordings on Tablo via API")
+                return found_ids
+            else:
+                logger.warning(f"Recordings API returned {response.status_code}")
+
+        except Exception as e:
+            logger.warning(f"Failed to fetch recordings from API: {e}")
+
+        # Fallback: Try to discover via HTTP directory listing (older Tablo versions)
+        return self._discover_recordings_fallback(base_url)
+
+    def _authenticate_tablo(self, base_url: str) -> bool:
+        """Authenticate with Tablo API."""
+        try:
+            # Tablo discovery/registration endpoint
+            discover_url = f"{base_url}/server/info"
+            response = self.session.get(discover_url, timeout=10)
+
+            if response.status_code == 200:
+                logger.info("Tablo API is accessible")
+                return True
+
+            # Try to get broadcast info
+            broadcast_url = f"{base_url}/broadcasts"
+            response = self.session.get(broadcast_url, timeout=10)
+
+            if response.status_code == 200:
+                logger.info("Tablo broadcasts endpoint accessible")
+                return True
+
+        except Exception as e:
+            logger.warning(f"Authentication attempt failed: {e}")
+
+        # For many Tablo devices, basic access without auth works for discovery
+        logger.info("Proceeding without explicit authentication")
+        return True
+
+    def _discover_recordings_fallback(self, base_url: str) -> Set[str]:
+        """Fallback method: parse HTML directory listings."""
+        try:
+            url = f"{base_url}/pvr/"
             response = self.session.get(url, timeout=30)
             response.raise_for_status()
             html = response.text
+
+            # Extract recording IDs from href="/pvr/123456/" patterns
+            pattern = r'href=["\']/pvr/(\d+)/["\']'
+            found_ids = set(re.findall(pattern, html))
+
+            logger.info(f"Discovered {len(found_ids)} recordings on Tablo via fallback method")
+            return found_ids
+
         except Exception as e:
-            logger.error(f"Failed to fetch recordings from {url}: {e}")
+            logger.error(f"Fallback discovery failed: {e}")
             return set()
-
-        # Extract recording IDs from href="/pvr/123456/" patterns
-        pattern = r'href=["\']/pvr/(\d+)/["\']'
-        found_ids = set(re.findall(pattern, html))
-
-        logger.info(f"Discovered {len(found_ids)} recordings on Tablo")
-        return found_ids
 
     def _get_segment_list(self, recording_id: str) -> Optional[List[str]]:
         """Get list of segment files for a recording."""
         tablo_ip = self.cfg['tablo']['ip']
-        url = f"http://{tablo_ip}/pvr/{recording_id}/segs/"
+        tablo_port = self.cfg['tablo'].get('port', 80)
+        url = f"http://{tablo_ip}:{tablo_port}/pvr/{recording_id}/segs/"
 
         try:
             response = self.session.get(url, timeout=30)
@@ -104,11 +168,12 @@ class TabloPuller:
     def _get_segment_timestamps(self, recording_id: str, segments: List[str]) -> Tuple[float, float]:
         """Get approximate start and end times from segment files."""
         tablo_ip = self.cfg['tablo']['ip']
+        tablo_port = self.cfg['tablo'].get('port', 80)
 
         # Try to get timestamps from HTTP headers
         try:
             # Get first segment timestamp
-            first_url = f"http://{tablo_ip}/pvr/{recording_id}/segs/{segments[0]}"
+            first_url = f"http://{tablo_ip}:{tablo_port}/pvr/{recording_id}/segs/{segments[0]}"
             first_response = self.session.head(first_url, timeout=10)
             first_time = datetime.fromtimestamp(
                 time.mktime(time.strptime(first_response.headers.get('last-modified', ''),
@@ -116,7 +181,7 @@ class TabloPuller:
             ).timestamp() if first_response.headers.get('last-modified') else time.time()
 
             # Get last segment timestamp
-            last_url = f"http://{tablo_ip}/pvr/{recording_id}/segs/{segments[-1]}"
+            last_url = f"http://{tablo_ip}:{tablo_port}/pvr/{recording_id}/segs/{segments[-1]}"
             last_response = self.session.head(last_url, timeout=10)
             last_time = datetime.fromtimestamp(
                 time.mktime(time.strptime(last_response.headers.get('last-modified', ''),
