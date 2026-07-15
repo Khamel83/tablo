@@ -1,0 +1,32 @@
+schema: homelab.project/v1
+project:
+  id: tablo
+  name: Tablo
+  repository: https://github.com/Khamel83/tablo
+  kind: service
+  lifecycle: development
+  owner: homelab
+monitoring:
+  state: standby
+runtime:
+  production:
+    host: unknown
+    managed_by: unknown
+    unit: tablo
+health:
+  source: homelab-api
+  checks: []
+observability:
+  event_sink: homelab-api:/observations
+  evidence_policy: sanitized
+dependencies:
+  required: []
+  optional: []
+secrets:
+  broker_consumer: tablo
+  references: []
+operations:
+  repair_ids: []
+docs:
+  index: README.md
+  operations: docs/OPERATIONS.md
